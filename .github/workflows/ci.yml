@@ -31,8 +31,7 @@ jobs:
 
       - name: install dependencies
         run: |
-          gem install bundler
-          bundle install
+          npm install
 
       - name: Run tests
         env:
