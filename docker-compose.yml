@@ -1,0 +1,24 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3030:3030"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+    env_file:
+      - .env
+    command: npm start
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tc_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - db_data:/var/lib/postgresql
+
+volumes:
+  db_data:
