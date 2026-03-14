@@ -1,8 +1,6 @@
 var express = require('express');
 var createError = require('http-errors');
-
 var pool = require('../db/pool');
-
 var router = express.Router();
 
 router.get('/search', async function(req, res, next) {
@@ -30,14 +28,19 @@ router.get('/search', async function(req, res, next) {
 });
 
 router.get('/', async function(req, res, next) {
+  var shouldReturnAll = req.query.type === 'all';
+  var queryParts = [
+    'SELECT id, title, content, author, created_at, updated_at',
+    'FROM posts',
+    'ORDER BY created_at DESC'
+  ];
+
+  if (!shouldReturnAll) {
+    queryParts.push('LIMIT 5');
+  }
+
   try {
-    var result = await pool.query(
-      [
-        'SELECT id, title, content, author, created_at, updated_at',
-        'FROM posts',
-        'ORDER BY created_at DESC'
-      ].join(' ')
-    );
+    var result = await pool.query(queryParts.join(' '));
 
     res.json(result.rows);
   } catch (error) {

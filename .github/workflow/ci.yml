@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: [self-hosted, linux, x64]
+    container:
+      image: node:25-bullseye-slim
+
+    services:
+      db:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update && apt-get install --no-install-recommends -y postgresql-client libpq-dev
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: install dependencies
+        run: |
+          gem install bundler
+          bundle install
+
+      - name: Run tests
+        env:
+          RAILS_ENV: test
+          POSTGRES_HOST: db
+        run: |
+          bundle exec rails db:create
+          bin/rails db:schema:load
+          bundle exec rspec
+
+      - name: Run coverage
+        env:
+          POSTGRES_HOST: db
+        run: |
+          npm run coverage
+
