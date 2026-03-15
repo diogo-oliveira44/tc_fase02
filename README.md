@@ -5,9 +5,16 @@ busca de posts.
 
 ### Tecnologias utilizadas
 
-- Node 25
+- Node 24
 - Postgres 18
 - express 5
+- Swagger
+- nginx
+
+### Urls do projeto:
+
+- Aplicação: http://localhost:3030
+- Produção: https://teste.diogooliveira.dev.br
 
 ### Iniciando o projeto
 
@@ -35,6 +42,34 @@ docker compose up -d
 docker compose run --rm --service-ports web bash
 ```
 
+4. Inicializando o banco de dados:
+
+- Pegue o ip do container do postgres
+
+```bash
+
+docker inspect <container_id> | grep "IPAddress"
+```
+
+Para criar a tabela `posts` com alguns dados inseridos no banco de dados, execute o seguinte comando:
+
+```bash
+psql -h <container_ip> -U postgres -d tc_db -f db/create-posts-table.sql
+```
+
+4.1. Se preferir, pode executar o seguinte script para criar os bancos de
+desenvolvimento e testes:
+
+```bash
+psql -h <container_ip> -U postgres -f db/create-databases.sql
+```
+
+5. Executando os testes
+
+```bash
+docker compose run --rm web npm run test
+```
+
 ### Acessando a aplicação
 
 A aplicação estará disponível em `http://localhost:3030`.
@@ -51,27 +86,18 @@ POSTGRES_PASSWORD -> A senha do usuário do postgres, em desenvolvimento é
 POSTGRES_DB -> O nome do banco de dados, em desenvolvimento é `postgres`
 
 
-### Inicializando o banco de dados
-
-- Pegue o ip do container do postgres
-
-```bash
-
-docker inspect <container_id> | grep "IPAddress"
-```
-
-Para criar a tabela `posts` com alguns dados inseridos no banco de dados, execute o seguinte comando:
-
-```bash
-psql -h 172.19.0.2 -U postgres -d tc_db -f db/create-posts-table.sql
-```
-
 ### Testando a aplicação
 
 Para rodar os testes, utilize o comando:
 
 ```bash
-npm test
+npm run test
+```
+
+Para ver a cobertura de testes:
+
+```bash
+npm run coverage
 ```
 
 ### Testando a aplicação com o curl
@@ -150,6 +176,11 @@ termo de busca e o sistema retornará uma lista de posts que contêm esse termo 
 curl http://localhost:3030/posts/search?q=termo-de-busca \
   -H "Content-Type: application/json"
 ```
+
+### Swagger
+
+Todas as rotas estão documentadas no swagger, para acessar a documentação, basta
+acessar `http://localhost:3030/swagger`
 
 ### Scripts
 
