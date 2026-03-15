@@ -50,30 +50,34 @@ jobs:
 
   deploy:
     needs: test
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: creates .ssh directory and set permissions
+      - name: Configure github ssh
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-      - name: add private key to ssh agent
-        run: |
-          echo "${{ secrets.PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-add ~/.ssh/id_rsa
 
       - name: Deploy using ssh
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@master
+        env:
+          NODE_ENV: production
         with:
           host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
           key: ${{ secrets.PRIVATE_KEY }}
           script: |
-            mkdir -p ~/tc_fase02
-            cd ~/tc_fase02
-            git pull origin main
-            docker-compose down
-            docker-compose up -d
+            mkdir -p ~/.ssh
+            echo "${{ secrets.GIT_PRIVATE_KEY }}" > ~/.ssh/github
+            eval "$(ssh-agent -s)"
+            chmod 600 ~/.ssh/github
+            ssh-add ~/.ssh/github
+            rm -rf ~/tc_fase02
+            cd ~/
+            git clone git@github.com:diogobest/tc_fase02.git
+            cd tc_fase02
+            cp ~/tc_fase02/.env.example ~/tc_fase02/.env
+            docker compose down
+            docker compose run --rm web npm install
+            docker compose up -d

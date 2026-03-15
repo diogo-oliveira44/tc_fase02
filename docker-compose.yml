@@ -14,9 +14,10 @@ services:
   db:
     image: postgres:18
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tc_db}
+      POSTGRES_DB: ${POSTGRES_DB:-tc_db_dev}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      NODE_ENV: ${NODE_ENV:-development}
     volumes:
       - db_data:/var/lib/postgresql
 
