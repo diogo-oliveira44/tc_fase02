@@ -26,6 +26,11 @@ jobs:
         run: |
           apt-get update && apt-get install --no-install-recommends -y postgresql-client libpq-dev
 
+      - name: execs database creation
+        run: |
+          export PGPASSWORD=postgres
+          psql -h db -U postgres -f db/create-databases.sql
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -43,3 +48,31 @@ jobs:
         run: |
           npm run coverage
 
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: creates .ssh directory and set permissions
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+      - name: add private key to ssh agent
+        run: |
+          echo "${{ secrets.PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Deploy using ssh
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          script: |
+            mkdir -p ~/tc_fase02
+            cd ~/tc_fase02
+            git pull origin main
+            docker-compose down
+            docker-compose up -d

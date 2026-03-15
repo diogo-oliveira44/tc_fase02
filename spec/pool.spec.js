@@ -15,7 +15,7 @@ describe('Pool', () => {
 
     expect(pool.options.user).toBe('postgres');
     expect(pool.options.password).toBe('postgres');
-    expect(pool.options.database).toBe('tc_db');
+    expect(pool.options.database).toBe('tc_db_dev');
     expect(pool.options.host).toBe('db');
     expect(pool.options.port).toBe(5432);
   });
