@@ -54,7 +54,7 @@ docker inspect <container_id> | grep "IPAddress"
 Para criar a tabela `posts` com alguns dados inseridos no banco de dados, execute o seguinte comando:
 
 ```bash
-psql -h <container_ip> -U postgres -d tc_db -f db/create-posts-table.sql
+psql -h <container_ip> -U postgres -d tc_db_dev -f db/create-posts-table.sql
 ```
 
 4.1. Se preferir, pode executar o seguinte script para criar os bancos de

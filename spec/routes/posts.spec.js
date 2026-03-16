@@ -1,40 +1,6 @@
+var request = require('supertest');
+var realApp = require('../../app');
 var realPool = require('../../db/pool');
-var realRouter = require('../../routes/posts');
-
-function getRouteHandler(router, method, path) {
-  var layer = router.stack.find(function(entry) {
-    return entry.route && entry.route.path === path && entry.route.methods[method];
-  });
-
-  return layer.route.stack[0].handle;
-}
-
-function createResponse() {
-  return {
-    statusCode: 200,
-    body: undefined,
-    sent: false,
-    status: jest.fn(function(code) {
-      this.statusCode = code;
-      return this;
-    }),
-    json: jest.fn(function(payload) {
-      this.body = payload;
-      return this;
-    }),
-    send: jest.fn(function(payload) {
-      this.sent = true;
-      this.body = payload;
-      return this;
-    })
-  };
-}
-
-function createError(status, message) {
-  var error = new Error(message);
-  error.status = status;
-  return error;
-}
 
 var seedPosts = [
   {
@@ -78,12 +44,12 @@ var seedPosts = [
 async function resetPostsTable() {
   await realPool.query(
     'CREATE TABLE IF NOT EXISTS posts (' +
-      'id BIGSERIAL PRIMARY KEY, ' +
-      'title VARCHAR(255) NOT NULL, ' +
-      'content TEXT NOT NULL, ' +
-      'author VARCHAR(255) NOT NULL, ' +
-      'created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, ' +
-      'updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP' +
+    'id BIGSERIAL PRIMARY KEY, ' +
+    'title VARCHAR(255) NOT NULL, ' +
+    'content TEXT NOT NULL, ' +
+    'author VARCHAR(255) NOT NULL, ' +
+    'created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, ' +
+    'updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP' +
     ')'
   );
 
@@ -103,7 +69,7 @@ async function resetPostsTable() {
 }
 
 describe('routes/posts', function() {
-  describe('database-backed routes', function() {
+  describe('Routes tests', function() {
     beforeAll(async function() {
       await resetPostsTable();
     });
@@ -117,260 +83,226 @@ describe('routes/posts', function() {
     });
 
     describe('GET /search', function() {
-    it('returns 400 when q is missing', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/search');
-      var req = { query: {} };
-      var res = createResponse();
-      var next = jest.fn();
+      it('returns 400 when q is missing', async function() {
+        var response = await request(realApp).get('/posts/search');
 
-      await handler(req, res, next);
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'The q query parameter is required.' });
+      });
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: 'The q query parameter is required.' });
-      expect(next).not.toHaveBeenCalled();
-    });
+      it('searches posts by trimmed query text', async function() {
+        var response = await request(realApp)
+          .get('/posts/search')
+          .query({ q: '  First Post  ' });
 
-    it('searches posts by trimmed query text', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/search');
-      var req = { query: { q: '  First Post  ' } };
-      var res = createResponse();
-      var next = jest.fn();
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveLength(1);
+        expect(response.body[0]).toEqual(expect.objectContaining({
+          id: response.body[0].id,
+          title: 'First Post',
+          content: 'This is the content of the first post.',
+          author: 'Alice',
+          created_at: response.body[0].created_at,
+          updated_at: response.body[0].updated_at
+        }));
+      });
 
-      await handler(req, res, next);
+      it('returns an empty array when no posts match the query', async function() {
+        var response = await request(realApp)
+          .get('/posts/search')
+          .query({ q: 'Nonexistent' });
 
-      expect(res.json).toHaveBeenCalledTimes(1);
-      expect(res.body).toHaveLength(1);
-      expect(res.body[0]).toEqual(expect.objectContaining({
-        id: res.body[0].id,
-        title: 'First Post',
-        content: 'This is the content of the first post.',
-        author: 'Alice',
-        created_at: res.body[0].created_at,
-        updated_at: res.body[0].updated_at
-      }));
-      expect(next).not.toHaveBeenCalled();
-    });
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual([]);
+      });
+
+      it('catches errors from the database', async function() {
+        var error = new Error('Internal Error');
+        jest.spyOn(realPool, 'query').mockRejectedValueOnce(error);
+
+        var response = await request(realApp)
+          .get('/posts/search')
+          .query({ q: 'First' });
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: 'Internal Error' });
+      });
     });
 
     describe('GET /', function() {
-    it('limits the default listing to five posts', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/');
-      var req = { query: {} };
-      var res = createResponse();
-      var next = jest.fn();
+      it('limits the default listing to five posts', async function() {
+        var response = await request(realApp).get('/posts');
 
-      await handler(req, res, next);
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveLength(5);
+        expect(response.body.map(function(post) { return post.title; })).toEqual([
+          'Sixth Post',
+          'Fifth Post',
+          'Fourth Post',
+          'Third Post',
+          'Second Post'
+        ]);
+      });
 
-      expect(res.json).toHaveBeenCalledTimes(1);
-      expect(res.body).toHaveLength(5);
-      expect(res.body.map(function(post) { return post.title; })).toEqual([
-        'Sixth Post',
-        'Fifth Post',
-        'Fourth Post',
-        'Third Post',
-        'Second Post'
-      ]);
-      expect(next).not.toHaveBeenCalled();
-    });
+      it('returns all posts when type=all', async function() {
+        var response = await request(realApp)
+          .get('/posts')
+          .query({ type: 'all' });
 
-    it('returns all posts when type=all', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/');
-      var req = { query: { type: 'all' } };
-      var res = createResponse();
-      var next = jest.fn();
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveLength(6);
+        expect(response.body[0]).toEqual(expect.objectContaining({ title: 'Sixth Post' }));
+        expect(response.body[5]).toEqual(expect.objectContaining({ title: 'First Post' }));
+      });
 
-      await handler(req, res, next);
+      it('catches errors from the database', async function() {
+        var error = new Error('Internal Error');
+        jest.spyOn(realPool, 'query').mockRejectedValueOnce(error);
 
-      expect(res.json).toHaveBeenCalledTimes(1);
-      expect(res.body).toHaveLength(6);
-      expect(res.body[0]).toEqual(expect.objectContaining({ title: 'Sixth Post' }));
-      expect(res.body[5]).toEqual(expect.objectContaining({ title: 'First Post' }));
-      expect(next).not.toHaveBeenCalled();
-    });
+        var response = await request(realApp)
+          .get('/posts');
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: 'Internal Error' });
+      });
     });
 
     describe('GET /:id', function() {
-    it('forwards a 400 error for an invalid id', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/:id');
-      var req = { params: { id: 'abc' } };
-      var res = createResponse();
-      var next = jest.fn();
+      it('returns 400 for an invalid id', async function() {
+        var response = await request(realApp).get('/posts/abc');
 
-      await handler(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({
-        status: 400,
-        message: 'Invalid post id.'
-      }));
-    });
-
-    it('forwards a 404 error when the post does not exist', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/:id');
-      var req = { params: { id: '42' } };
-      var res = createResponse();
-      var next = jest.fn();
-
-      await handler(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({
-        status: 404,
-        message: 'Post not found.'
-      }));
-    });
-
-    it('returns the post when it exists', async function() {
-      var handler = getRouteHandler(realRouter, 'get', '/:id');
-      var req = { params: { id: '3' } };
-      var res = createResponse();
-      var next = jest.fn();
-
-      await handler(req, res, next);
-
-      expect(res.json).toHaveBeenCalledWith({
-        id: res.body.id,
-        title: 'Third Post',
-        content: 'This is the content of the third post.',
-        author: 'Charlie',
-        created_at: res.body.created_at,
-        updated_at: res.body.updated_at
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'Invalid post id.' });
       });
-      expect(next).not.toHaveBeenCalled();
-    });
+
+      it('returns 404 when the post does not exist', async function() {
+        var response = await request(realApp).get('/posts/42');
+
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ error: 'Post not found.' });
+      });
+
+      it('returns the post when it exists', async function() {
+        var response = await request(realApp).get('/posts/3');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+          id: response.body.id,
+          title: 'Third Post',
+          content: 'This is the content of the third post.',
+          author: 'Charlie',
+          created_at: response.body.created_at,
+          updated_at: response.body.updated_at
+        });
+      });
+
+      it('catches errors from the database', async function() {
+        var error = new Error('Internal Error');
+        jest.spyOn(realPool, 'query').mockRejectedValueOnce(error);
+
+        var response = await request(realApp)
+          .get('/posts/3');
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: 'Internal Error' });
+      });
     });
 
     describe('POST /', function() {
-    it('returns 400 when required fields are missing', async function() {
-      var handler = getRouteHandler(realRouter, 'post', '/');
-      var req = { body: { title: 'Title' } };
-      var res = createResponse();
-      var next = jest.fn();
+      it('returns 400 when required fields are missing', async function() {
+        var response = await request(realApp)
+          .post('/posts')
+          .send({ title: 'Title' });
 
-      await handler(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: 'title, content and author are required.' });
-      expect(next).not.toHaveBeenCalled();
-    });
-
-    it('creates a post with trimmed fields', async function() {
-      var handler = getRouteHandler(realRouter, 'post', '/');
-      var req = {
-        body: {
-          title: '  Hello  ',
-          content: '  World  ',
-          author: '  Ada  '
-        }
-      };
-      var res = createResponse();
-      var next = jest.fn();
-      var insertedPost;
-
-      await handler(req, res, next);
-      insertedPost = await realPool.query(
-        'SELECT title, content, author FROM posts WHERE id = $1',
-        [res.body.id]
-      );
-
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.body).toEqual(expect.objectContaining({
-        title: 'Hello',
-        content: 'World',
-        author: 'Ada'
-      }));
-      expect(insertedPost.rows[0]).toEqual({
-        title: 'Hello',
-        content: 'World',
-        author: 'Ada'
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'title, content and author are required.' });
       });
-      expect(next).not.toHaveBeenCalled();
-    });
+
+      it('creates a post with trimmed fields', async function() {
+        var response = await request(realApp)
+          .post('/posts')
+          .send({
+            title: '  Hello  ',
+            content: '  World  ',
+            author: '  Ada  '
+          });
+        var insertedPost = await realPool.query(
+          'SELECT title, content, author FROM posts WHERE id = $1',
+          [response.body.id]
+        );
+
+        expect(response.status).toBe(201);
+        expect(response.body).toEqual(expect.objectContaining({
+          title: 'Hello',
+          content: 'World',
+          author: 'Ada'
+        }));
+        expect(insertedPost.rows[0]).toEqual({
+          title: 'Hello',
+          content: 'World',
+          author: 'Ada'
+        });
+      });
     });
 
     describe('PUT /:id', function() {
-    it('returns 400 when the payload is invalid', async function() {
-      var handler = getRouteHandler(realRouter, 'put', '/:id');
-      var req = { params: { id: '5' }, body: { title: 'Only title' } };
-      var res = createResponse();
-      var next = jest.fn();
+      it('returns 400 when the payload is invalid', async function() {
+        var response = await request(realApp)
+          .put('/posts/5')
+          .send({ title: 'Only title' });
 
-      await handler(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: 'title, content and author are required.' });
-      expect(next).not.toHaveBeenCalled();
-    });
-
-    it('forwards a 404 error when updating a missing post', async function() {
-      var handler = getRouteHandler(realRouter, 'put', '/:id');
-      var req = {
-        params: { id: '99' },
-        body: { title: 'Title', content: 'Content', author: 'Ada' }
-      };
-      var res = createResponse();
-      var next = jest.fn();
-
-      await handler(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({
-        status: 404,
-        message: 'Post not found.'
-      }));
-    });
-
-    it('returns error when id is invalid', async function() {
-      var handler = getRouteHandler(realRouter, 'put', '/:id');
-      var req = {
-        params: { id: 'abc' },
-        body: { title: 'Title', content: 'Content', author: 'Ada' }
-      };
-      var res = createResponse();
-      var next = jest.fn();
-
-      await handler(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({
-        status: 400,
-        message: 'Invalid post id.'
-      }));
-    });
-
-    it('updates successfully', async function() {
-      var handler = getRouteHandler(realRouter, 'put', '/:id');
-      var req = {
-        params: { id: '5' },
-        body: { title: 'Updated', content: 'Changed', author: 'Ada' }
-      };
-      var res = createResponse();
-      var next = jest.fn();
-      var updatedPost;
-
-      await handler(req, res, next);
-      updatedPost = await realPool.query(
-        'SELECT title, content, author FROM posts WHERE id = $1',
-        [res.body.id]
-      );
-
-      expect(res.body).toEqual(expect.objectContaining({
-        id: res.body.id,
-        title: 'Updated',
-        content: 'Changed',
-        author: 'Ada',
-        created_at: res.body.created_at,
-        updated_at: res.body.updated_at
-      }));
-      expect(updatedPost.rows[0]).toEqual({
-        title: 'Updated',
-        content: 'Changed',
-        author: 'Ada'
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'title, content and author are required.' });
       });
-      expect(next).not.toHaveBeenCalled();
-    });
+
+      it('returns 404 when updating a missing post', async function() {
+        var response = await request(realApp)
+          .put('/posts/99')
+          .send({ title: 'Title', content: 'Content', author: 'Ada' });
+
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ error: 'Post not found.' });
+      });
+
+      it('returns 400 when id is invalid', async function() {
+        var response = await request(realApp)
+          .put('/posts/abc')
+          .send({ title: 'Title', content: 'Content', author: 'Ada' });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'Invalid post id.' });
+      });
+
+      it('updates successfully', async function() {
+        var response = await request(realApp)
+          .put('/posts/5')
+          .send({ title: 'Updated', content: 'Changed', author: 'Ada' });
+        var updatedPost = await realPool.query(
+          'SELECT title, content, author FROM posts WHERE id = $1',
+          [response.body.id]
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual(expect.objectContaining({
+          id: response.body.id,
+          title: 'Updated',
+          content: 'Changed',
+          author: 'Ada',
+          created_at: response.body.created_at,
+          updated_at: response.body.updated_at
+        }));
+        expect(updatedPost.rows[0]).toEqual({
+          title: 'Updated',
+          content: 'Changed',
+          author: 'Ada'
+        });
+      });
     });
   });
 
   describe('DELETE /:id', function() {
+    var app;
     var pool;
-    var router;
 
     beforeEach(function() {
       jest.resetModules();
@@ -380,8 +312,8 @@ describe('routes/posts', function() {
         };
       });
 
+      app = require('../../app');
       pool = require('../../db/pool');
-      router = require('../../routes/posts');
     });
 
     afterEach(function() {
@@ -389,76 +321,54 @@ describe('routes/posts', function() {
     });
 
     it('returns 204 when a post is deleted', async function() {
-      var handler = getRouteHandler(router, 'delete', '/:id');
-      var req = { params: { id: '9' } };
-      var res = createResponse();
-      var next = jest.fn();
+      var response;
 
       pool.query.mockResolvedValue({ rowCount: 1, rows: [{ id: 9 }] });
-
-      await handler(req, res, next);
+      response = await request(app).delete('/posts/9');
 
       expect(pool.query).toHaveBeenCalledWith(
         'DELETE FROM posts WHERE id = $1 RETURNING id',
         [9]
       );
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalled();
-      expect(next).not.toHaveBeenCalled();
+      expect(response.status).toBe(204);
+      expect(response.text).toBe('');
     });
 
-    it('returns error 400 when id is invalid', async function() {
-      var handler = getRouteHandler(router, 'delete', '/:id');
-      var req = { params: { id: 'abc' } };
-      var res = createResponse();
-      var next = jest.fn();
-
-      await handler(req, res, next);
+    it('returns 400 when id is invalid', async function() {
+      var response = await request(app).delete('/posts/abc');
 
       expect(pool.query).not.toHaveBeenCalled();
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({
-        status: 400,
-        message: 'Invalid post id.'
-      }));
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'Invalid post id.' });
     });
 
-    it('returns not found when the post does not exist', async function() {
-      var handler = getRouteHandler(router, 'delete', '/:id');
-      var req = { params: { id: '9' } };
-      var res = createResponse();
-      var next = jest.fn();
+    it('returns 404 when the post does not exist', async function() {
+      var response;
 
       pool.query.mockResolvedValue({ rowCount: 0, rows: [] });
-
-      await handler(req, res, next);
+      response = await request(app).delete('/posts/9');
 
       expect(pool.query).toHaveBeenCalledWith(
         'DELETE FROM posts WHERE id = $1 RETURNING id',
         [9]
       );
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({
-        status: 404,
-        message: 'Post not found.'
-      }));
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: 'Post not found.' });
     });
 
     it('forwards errors from the database', async function() {
-      var handler = getRouteHandler(router, 'delete', '/:id');
-      var req = { params: { id: '9' } };
-      var res = createError(500, 'Internal Server Error');
-      var next = jest.fn();
       var error = new Error('Internal Server Error');
+      var response;
 
       pool.query.mockRejectedValue(error);
-
-      await handler(req, res, next);
+      response = await request(app).delete('/posts/9');
 
       expect(pool.query).toHaveBeenCalledWith(
         'DELETE FROM posts WHERE id = $1 RETURNING id',
         [9]
       );
-      expect(next).toHaveBeenCalledWith(error);
-      expect(res.status).toEqual(500);
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Internal Server Error' });
     });
   });
 });

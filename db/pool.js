@@ -9,11 +9,11 @@ var pool = new Pool({
 });
 
 if(process.env.NODE_ENV === 'test') {
-  pool.database = 'tc_db_test'
+  pool.options.database = 'tc_db_test'
 }
 
 if(process.env.NODE_ENV === 'production') {
-  pool.database = 'tc_db_prod'
+  pool.options.database = 'tc_db_prod'
 }
 
 module.exports = pool;

@@ -35,4 +35,15 @@ describe('Pool', () => {
     expect(pool.options.host).toBe('test_host');
     expect(pool.options.port).toBe(5432);
   });
+
+  it('returns the correct database name based on NODE_ENV', async () => {
+    process.env.NODE_ENV = 'test';
+    var poolTest = require('../db/pool');
+    expect(poolTest.options.database).toBe('tc_db_test');
+
+    jest.resetModules()
+    process.env.NODE_ENV = 'production';
+    var poolProd = require('../db/pool');
+    expect(poolProd.options.database).toBe('tc_db_prod');
+  })
 });
