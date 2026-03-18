@@ -1,4 +1,5 @@
 var swaggerUi = require('swagger-ui-express');
+const url = process.env.NODE_ENV == "development" ? 'http://localhost:3030/' : 'https://teste.diogooliveira.dev.br/';
 
 var openApiDocument = {
   openapi: '3.0.3',
@@ -9,7 +10,7 @@ var openApiDocument = {
   },
   servers: [
     {
-      url: 'http://localhost:3030/'
+      url: url,
     }
   ],
   tags: [
