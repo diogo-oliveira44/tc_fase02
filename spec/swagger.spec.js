@@ -4,6 +4,7 @@ var swagger = require('../swagger');
 describe('swagger integration', function() {
   it('exposes the expected OpenAPI metadata', function() {
     expect(swagger.openApiDocument.openapi).toBe('3.0.3');
+    expect(swagger.openApiDocument.paths['/login']).toBeDefined();
     expect(swagger.openApiDocument.paths['/posts']).toBeDefined();
     expect(swagger.openApiDocument.paths['/posts/search']).toBeDefined();
     expect(swagger.openApiDocument.paths['/posts/{id}']).toBeDefined();

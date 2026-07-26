@@ -15,6 +15,10 @@ var openApiDocument = {
   ],
   tags: [
     {
+      name: 'Auth',
+      description: 'Autenticação da API'
+    },
+    {
       name: 'Posts',
       description: 'Crie, edite, atualize e exclusa postagens do blog'
     }
@@ -69,6 +73,39 @@ var openApiDocument = {
         },
         required: ['title', 'content', 'author']
       },
+      LoginInput: {
+        type: 'object',
+        properties: {
+          username: {
+            type: 'string',
+            example: 'admin'
+          },
+          password: {
+            type: 'string',
+            format: 'password',
+            example: 'password'
+          }
+        },
+        required: ['username', 'password']
+      },
+      LoginResponse: {
+        type: 'object',
+        properties: {
+          accessToken: {
+            type: 'string',
+            example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+          },
+          tokenType: {
+            type: 'string',
+            example: 'Bearer'
+          },
+          expiresIn: {
+            type: 'integer',
+            example: 3600
+          }
+        },
+        required: ['accessToken', 'tokenType', 'expiresIn']
+      },
       Error: {
         type: 'object',
         properties: {
@@ -82,6 +119,55 @@ var openApiDocument = {
     }
   },
   paths: {
+    '/login': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Autentique um usuário',
+        description: 'Retorna um JWT para credenciais válidas.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/LoginInput'
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Token JWT gerado com sucesso',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/LoginResponse'
+                }
+              }
+            }
+          },
+          400: {
+            description: 'Requisição inválida',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/Error'
+                }
+              }
+            }
+          },
+          401: {
+            description: 'Credenciais inválidas',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/Error'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     '/posts': {
       get: {
         tags: ['Posts'],

@@ -5,6 +5,11 @@ services:
       - "3030:3030"
     volumes:
       - .:/app
+    networks:
+      default:
+      frontend:
+        aliases:
+          - fiap_api
     depends_on:
       - db
     env_file:
@@ -23,3 +28,8 @@ services:
 
 volumes:
   db_data:
+
+networks:
+  frontend:
+    external: true
+    name: fiap_front

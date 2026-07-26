@@ -1,6 +1,7 @@
 var express = require('express');
 var createError = require('http-errors');
 var pool = require('../db/pool');
+var requireManager = require('./auth').requireManager;
 var router = express.Router();
 
 router.get('/search', async function(req, res, next) {
@@ -71,7 +72,7 @@ router.get('/:id', async function(req, res, next) {
   }
 });
 
-router.post('/', async function(req, res, next) {
+router.post('/', requireManager, async function(req, res, next) {
   var payload = normalizePostPayload(req.body);
 
   if (payload.error) {
@@ -94,7 +95,7 @@ router.post('/', async function(req, res, next) {
   }
 });
 
-router.put('/:id', async function(req, res, next) {
+router.put('/:id', requireManager, async function(req, res, next) {
   var postId = parseInt(req.params.id, 10);
   var payload = normalizePostPayload(req.body);
 
@@ -127,7 +128,7 @@ router.put('/:id', async function(req, res, next) {
   }
 });
 
-router.delete('/:id', async function(req, res, next) {
+router.delete('/:id', requireManager, async function(req, res, next) {
   var postId = parseInt(req.params.id, 10);
 
   if (isNaN(postId)) {
