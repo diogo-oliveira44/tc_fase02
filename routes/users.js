@@ -1,12 +1,13 @@
 var express = require('express');
 var createError = require('http-errors');
 var pool = require('../db/pool');
+var requireAuthenticated = require('./auth').requireAuthenticated;
 var requireManager = require('./auth').requireManager;
 
 function createUsersRouter(role) {
   var router = express.Router();
 
-  router.use(requireManager);
+  router.use(createUserAuthorization(role));
 
   router.get('/', async function(req, res, next) {
     var page = parsePositiveInt(req.query.page, 1);
@@ -137,6 +138,22 @@ function createUsersRouter(role) {
   });
 
   return router;
+}
+
+function createUserAuthorization(role) {
+  if (role !== 'student') {
+    return requireManager;
+  }
+
+  return function(req, res, next) {
+    requireAuthenticated(req, res, function() {
+      if (req.user.role !== 'student' && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'You are not allowed to perform this action.' });
+      }
+
+      next();
+    });
+  };
 }
 
 function parsePositiveInt(value, fallback) {

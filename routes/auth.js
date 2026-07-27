@@ -1,14 +1,20 @@
 var crypto = require('crypto');
 
 function requireManager(req, res, next) {
+  requireAuthenticated(req, res, function() {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You are not allowed to perform this action.' });
+    }
+
+    next();
+  });
+}
+
+function requireAuthenticated(req, res, next) {
   var user = getUserFromAuthorization(req.headers.authorization || '');
 
   if (!user) {
     return res.status(401).json({ error: 'Authentication is required.' });
-  }
-
-  if (user.role !== 'teacher' && user.role !== 'admin') {
-    return res.status(403).json({ error: 'You are not allowed to perform this action.' });
   }
 
   req.user = user;
@@ -60,5 +66,6 @@ function getJwtSecret() {
 }
 
 module.exports = {
+  requireAuthenticated: requireAuthenticated,
   requireManager: requireManager
 };
